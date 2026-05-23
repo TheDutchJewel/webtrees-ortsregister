@@ -138,11 +138,13 @@ class OrtsregisterModule extends AbstractModule implements
 
     private function migrateDatabase(): void
     {
+        $schema  = DB::schema();
         $current = (int) $this->getPreference('SCHEMA_VERSION', '0');
+        $didDdl  = false;
 
         if ($current < 1) {
-            if (!DB::schema()->hasTable('ortsregister_place_meta')) {
-                DB::schema()->create('ortsregister_place_meta', function (Blueprint $table): void {
+            if (!$schema->hasTable('ortsregister_place_meta')) {
+                $schema->create('ortsregister_place_meta', function (Blueprint $table): void {
                     $table->integer('place_id');
                     $table->integer('tree_id');
                     $table->text('meta_data');
@@ -151,10 +153,11 @@ class OrtsregisterModule extends AbstractModule implements
                     $table->primary(['place_id', 'tree_id']);
                     $table->index('tree_id');
                 });
+                $didDdl = true;
             }
 
-            if (!DB::schema()->hasTable('ortsregister_merge_log')) {
-                DB::schema()->create('ortsregister_merge_log', function (Blueprint $table): void {
+            if (!$schema->hasTable('ortsregister_merge_log')) {
+                $schema->create('ortsregister_merge_log', function (Blueprint $table): void {
                     $table->bigIncrements('id');
                     $table->integer('tree_id');
                     $table->string('operation', 32);
@@ -166,6 +169,22 @@ class OrtsregisterModule extends AbstractModule implements
                     $table->timestamp('created_at')->useCurrent();
                     $table->index(['tree_id', 'created_at']);
                 });
+                $didDdl = true;
+            }
+        }
+
+        // CREATE TABLE ist DDL und commit-implizit – das beendet die von
+        // webtrees' UseTransaction-Middleware aussen gestartete Transaktion.
+        // Wir starten eine neue, damit das spätere Commit der Middleware
+        // nicht mit "no active transaction" abbricht. (Pattern aus Sammlungen-Modul.)
+        if ($didDdl) {
+            try {
+                $pdo = DB::connection()->getPdo();
+                if (!$pdo->inTransaction()) {
+                    $pdo->beginTransaction();
+                }
+            } catch (\Throwable) {
+                // Best effort.
             }
         }
 
