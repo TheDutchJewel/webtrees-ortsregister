@@ -253,6 +253,9 @@ class GedcomPlaceManipulator
             $resolution = $resolutions[$tag] ?? null;
 
             if ($resolution === SubtagConflict::RESOLUTION_DROP) {
+                // DROP = Tag verschwindet komplett, weder Quell- noch Ziel-Wert.
+                // usedTargetTags markieren, sonst würde Schritt 3 den Ziel-Wert ergänzen.
+                $usedTargetTags[$tag] = true;
                 continue;
             }
 
